@@ -71,10 +71,9 @@ class ZoomableView<Element, Content: View>: UIScrollView, UIScrollViewDelegate {
 
         if config.dismissCallback != nil {
             dismissPanGesture = UIPanGestureRecognizer(target: self, action: #selector(handleDismissPanGesture(_:)))
+            dismissPanGesture.delegate = self as? UIGestureRecognizerDelegate
             addGestureRecognizer(dismissPanGesture)
-            dismissPanGesture.delegate = self
-        }
-        
+        } 
         translatesAutoresizingMaskIntoConstraints = false
         delegate = self
         maximumZoomScale = config.maxZoom
