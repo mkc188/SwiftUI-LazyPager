@@ -341,10 +341,6 @@ class ZoomableView<Element, Content: View>: UIScrollView, UIScrollViewDelegate {
 
     // MARK: - UIScrollViewDelegate
 
-    func scrollViewDidScroll(_ scrollView: UIScrollView) {
-        updateState()
-    }
-    
     func viewForZooming(in scrollView: UIScrollView) -> UIView? {
         return view
     }
