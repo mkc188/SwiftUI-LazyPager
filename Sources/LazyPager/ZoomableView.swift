@@ -69,11 +69,6 @@ class ZoomableView<Element, Content: View>: UIScrollView, UIScrollViewDelegate {
 
         super.init(frame: .zero)
 
-        if config.dismissCallback != nil {
-            dismissPanGesture = UIPanGestureRecognizer(target: self, action: #selector(handleDismissPanGesture(_:)))
-            dismissPanGesture.delegate = self as? UIGestureRecognizerDelegate
-            addGestureRecognizer(dismissPanGesture)
-        } 
         translatesAutoresizingMaskIntoConstraints = false
         delegate = self
         maximumZoomScale = config.maxZoom
@@ -213,17 +208,43 @@ class ZoomableView<Element, Content: View>: UIScrollView, UIScrollViewDelegate {
     
     // MARK: - UIGestureRecognizerDelegate
 
-    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
-        // Allow simultaneous recognition only if one is our dismiss gesture and the other is the scroll view's pan gesture
-        if gestureRecognizer == dismissPanGesture && otherGestureRecognizer == panGestureRecognizer {
-            return true
+    // MARK: - UIScrollViewDelegate
+
+    func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        if !isDraggingForDismiss {
+            updateState()
         }
-        if otherGestureRecognizer == dismissPanGesture && gestureRecognizer == panGestureRecognizer {
-            return true
-        }
-        return false
     }
 
+    func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+        initialDragPoint = scrollView.contentOffset
+    }
+
+    func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
+        guard let initialPoint = initialDragPoint else { return }
+
+        let dragVector = CGPoint(
+            x: scrollView.contentOffset.x - initialPoint.x,
+            y: scrollView.contentOffset.y - initialPoint.y
+        )
+
+        // Determine if this is a diagonal drag
+        let absX = abs(dragVector.x)
+        let absY = abs(dragVector.y)
+
+        // If the drag is more diagonal than horizontal/vertical
+        if min(absX, absY) / max(absX, absY) > 0.3 {
+            let velocity = scrollView.panGestureRecognizer.velocity(in: scrollView)
+            let velocityMagnitude = sqrt(pow(velocity.x, 2) + pow(velocity.y, 2))
+
+            if velocityMagnitude > 1000 {
+                isDraggingForDismiss = true
+                config.dismissCallback?()
+            }
+        }
+
+        initialDragPoint = nil
+    }
 
     @objc private func handleDismissPanGesture(_ gesture: UIPanGestureRecognizer) {
         guard config.dismissCallback != nil else { return }
