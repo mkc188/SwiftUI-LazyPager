@@ -58,7 +58,7 @@ class ZoomableView<Element, Content: View>: UIScrollView, UIScrollViewDelegate {
     var view: UIView {
         return hostingController.view
     }
-    
+
     init(hostingController: UIHostingController<Content>, index: Int, data: Element, config: Config) {
         self.index = index
         self.hostingController = hostingController
@@ -71,8 +71,8 @@ class ZoomableView<Element, Content: View>: UIScrollView, UIScrollViewDelegate {
 
         if config.dismissCallback != nil {
             dismissPanGesture = UIPanGestureRecognizer(target: self, action: #selector(handleDismissPanGesture(_:)))
-            dismissPanGesture.delegate = self
             addGestureRecognizer(dismissPanGesture)
+            dismissPanGesture.delegate = self
         }
         
         translatesAutoresizingMaskIntoConstraints = false
