@@ -213,16 +213,33 @@ class ZoomableView<Element, Content: View>: UIScrollView, UIScrollViewDelegate {
     
     // MARK: - UIGestureRecognizerDelegate
 
-    public func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
-                                 shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
-        return true
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+        // Allow simultaneous recognition only if one is our dismiss gesture and the other is the scroll view's pan gesture
+        if gestureRecognizer == dismissPanGesture && otherGestureRecognizer == panGestureRecognizer {
+            return true
+        }
+        if otherGestureRecognizer == dismissPanGesture && gestureRecognizer == panGestureRecognizer {
+            return true
+        }
+        return false
     }
+
 
     @objc private func handleDismissPanGesture(_ gesture: UIPanGestureRecognizer) {
         guard config.dismissCallback != nil else { return }
 
         let translation = gesture.translation(in: self)
         let velocity = gesture.velocity(in: self)
+
+        // Check if we're currently zoomed in - don't allow dismiss while zoomed
+        if zoomScale != minimumZoomScale {
+            return
+        }
+
+        // Don't interfere with horizontal/vertical scrolling
+        if abs(contentOffset.x) > 0 || abs(contentOffset.y) > 0 {
+            return
+        }
 
         switch gesture.state {
         case .began:
