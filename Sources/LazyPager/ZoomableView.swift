@@ -47,6 +47,9 @@ class ZoomableView<Element, Content: View>: UIScrollView, UIScrollViewDelegate {
     var isAnimating = false
     var isZoomHappening = false
     var lastInset: CGFloat = 0
+    var initialDragPoint: CGPoint?
+    var isDraggingForDismiss = false
+    var dismissPanGesture: UIPanGestureRecognizer!
     
     var hostingController: UIHostingController<Content>
     var index: Int
@@ -63,8 +66,14 @@ class ZoomableView<Element, Content: View>: UIScrollView, UIScrollViewDelegate {
         self.config = config
         let v = UIView()
         self.bottomView = v
-        
+
         super.init(frame: .zero)
+
+        if config.dismissCallback != nil {
+            dismissPanGesture = UIPanGestureRecognizer(target: self, action: #selector(handleDismissPanGesture(_:)))
+            dismissPanGesture.delegate = self
+            addGestureRecognizer(dismissPanGesture)
+        }
         
         translatesAutoresizingMaskIntoConstraints = false
         delegate = self
@@ -203,6 +212,98 @@ class ZoomableView<Element, Content: View>: UIScrollView, UIScrollViewDelegate {
         updateState()
     }
     
+    // MARK: - UIGestureRecognizerDelegate
+
+    public func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
+                                 shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+        return true
+    }
+
+    @objc private func handleDismissPanGesture(_ gesture: UIPanGestureRecognizer) {
+        guard config.dismissCallback != nil else { return }
+
+        let translation = gesture.translation(in: self)
+        let velocity = gesture.velocity(in: self)
+
+        switch gesture.state {
+        case .began:
+            initialDragPoint = translation
+            isDraggingForDismiss = false
+
+        case .changed:
+            guard let initialPoint = initialDragPoint else { return }
+
+            let dragVector = CGPoint(
+                x: translation.x - initialPoint.x,
+                y: translation.y - initialPoint.y
+            )
+
+            // Determine if this is a diagonal drag
+            let absX = abs(dragVector.x)
+            let absY = abs(dragVector.y)
+
+            // Check if the drag is diagonal enough
+            if min(absX, absY) / max(absX, absY) > 0.3 {
+                isDraggingForDismiss = true
+
+                let dragDistance = sqrt(pow(dragVector.x, 2) + pow(dragVector.y, 2))
+                let maxDimension = max(frame.size.width, frame.size.height)
+                let scale = max(0.85, 1 - (dragDistance / maxDimension * 0.15))
+
+                // Apply transform
+                let transform = CGAffineTransform(translationX: dragVector.x, y: dragVector.y)
+                    .scaledBy(x: scale, y: scale)
+                view.transform = transform
+
+                // Update opacity
+                let absoluteDragOffset = normalize(from: 0, at: dragDistance, to: maxDimension)
+                let fadeOffset = normalize(from: 0, at: absoluteDragOffset, to: config.fullFadeOnDragAt)
+                config.backgroundOpacity?.wrappedValue = 1 - fadeOffset
+            }
+
+        case .ended, .cancelled:
+            guard isDraggingForDismiss else {
+                resetViewTransform()
+                return
+            }
+
+            let velocityMagnitude = sqrt(pow(velocity.x, 2) + pow(velocity.y, 2))
+
+            if velocityMagnitude > 1000 { // Adjust this threshold as needed
+                // Dismiss
+                let angle = atan2(velocity.y, velocity.x)
+                let dismissDistance = max(frame.size.width, frame.size.height) * 1.5
+
+                UIView.animate(withDuration: config.dismissAnimationLength, animations: {
+                    let transform = CGAffineTransform(translationX: cos(angle) * dismissDistance,
+                                                    y: sin(angle) * dismissDistance)
+                        .scaledBy(x: 0.5, y: 0.5)
+                    self.view.transform = transform
+                    self.config.backgroundOpacity?.wrappedValue = 0
+                }) { _ in
+                    self.config.dismissCallback?()
+                }
+            } else {
+                resetViewTransform()
+            }
+
+            initialDragPoint = nil
+            isDraggingForDismiss = false
+
+        default:
+            break
+        }
+    }
+
+    private func resetViewTransform() {
+        UIView.animate(withDuration: 0.3) {
+            self.view.transform = .identity
+            self.config.backgroundOpacity?.wrappedValue = 1
+        }
+    }
+
+    // MARK: - UIScrollViewDelegate
+
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
         updateState()
     }
